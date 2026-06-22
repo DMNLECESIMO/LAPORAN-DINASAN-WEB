@@ -1,7 +1,2 @@
-Plaintext
-
-streamlit
 supabase
-pandas
 fpdf2
-requests
