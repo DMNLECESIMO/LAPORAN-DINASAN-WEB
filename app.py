@@ -5,7 +5,7 @@ from fpdf import FPDF
 import datetime
 import calendar
 
-# 1. Inisialisasi Supabase (Pastikan secrets sudah diatur di Streamlit Cloud)
+# 1. Inisialisasi Supabase
 @st.cache_resource
 def init_supabase():
     url = st.secrets["SUPABASE_URL"]
@@ -14,7 +14,7 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Tambahkan Judul Aplikasi
+# Judul Aplikasi
 st.title("🚂 Web Laporan Pengoperasian KAI")
 st.subheader("🔍 Rekapitulasi Data & Download PDF 4 Halaman")
 
@@ -64,18 +64,17 @@ if list_karyawan:
     if data_harian:
         df = pd.DataFrame(data_harian)
         
-        # Skenario pencegahan KeyError: pastikan kolom tersedia atau isi dengan string kosong jika absen
+        # Pengaman jika kolom kosong agar tidak memicu KeyError
         kolom_wajib = ["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]
         for kol in kolom_wajib:
             if kol not in df.columns:
                 df[kol] = ""
                 
-        # Menampilkan tabel di Streamlit
+        # Menampilkan tabel di halaman web Streamlit
         st.dataframe(df[kolom_wajib], use_container_width=True)
         
-        # 4. Tombol Cetak PDF
-        if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
-            # Query data tambahan untuk foto/daftar hadir jika diperlukan di PDF
+        # 4. Tombol Cetak PDF (Gunakan key unik agar tidak terkena DuplicateElementId)
+        if st.button("🖨️ Urutkan & Cetak PDF Resmi", key="btn_cetak_pdf_utama"):
             try:
                 abs_data = supabase.table("daftar_hadir")\
                     .select("foto_hadir_url")\
@@ -85,11 +84,11 @@ if list_karyawan:
             except Exception as e:
                 abs_data = []
                 
-            # Proses Pembuatan PDF 
+            # Pembuatan struktur PDF 
             pdf = FPDF()
             pdf.add_page()
             pdf.set_font("Arial", "B", 14)
-            pdf.cell(100, 8, "LAPORAN KEGIATAN PENGOPERASIAN", ln=True)
+            pdf.cell(100, 8, "REKAPITULASI LAPORAN REAL-TIME", ln=True)
             pdf.set_font("Arial", "", 11)
             pdf.cell(100, 8, f"BULAN: {bln_cari} / {thn_cari}", ln=True)
             pdf.cell(100, 8, f"NAMA: {nama_cari} ({nipp_cari})", ln=True)
@@ -98,679 +97,28 @@ if list_karyawan:
             # Header Tabel PDF
             pdf.set_font("Arial", "B", 10)
             pdf.cell(30, 8, "Hari / Tanggal", border=1)
-            pdf.cell(40, 8, "Kegiatan", border=1)
-            pdf.cell(50, 8, "Serah Terima Dinasan", border=1)
+            pdf.cell(45, 8, "Kegiatan", border=1)
+            pdf.cell(55, 8, "Serah Terima Dinasan", border=1)
             pdf.cell(60, 8, "Dokumentasi Kegiatan", border=1, ln=True)
             
-            # Isi Tabel PDF
+            # Isi Baris Tabel PDF
             pdf.set_font("Arial", "", 9)
             for _, row in df.iterrows():
                 pdf.cell(30, 10, str(row["tanggal"]), border=1)
-                pdf.cell(40, 10, str(row["jenis_dinasan"])[:20], border=1)
-                pdf.cell(50, 10, str(row["serah_terima"])[:25], border=1)
+                pdf.cell(45, 10, str(row["jenis_dinasan"])[:20], border=1)
+                pdf.cell(55, 10, str(row["serah_terima"])[:25], border=1)
                 pdf.cell(60, 10, str(row["detail_kegiatan"])[:30], border=1, ln=True)
                 
             pdf_output = pdf.output(dest='S').encode('latin-1')
             
             st.download_button(
-                label="📥 Download Dokumen PDF Resmi 4 Halaman",
+                label="📥 Download Dokumen PDF Hasil Cetak",
                 data=pdf_output,
-                file_name=f"Laporan_Resmi_{nama_cari}_{filter_bln}.pdf",
-                mime="application/pdf"
+                file_name=f"Laporan_{nama_cari}_{filter_bln}.pdf",
+                mime="application/pdf",
+                key="btn_download_proses"
             )
     else:
         st.info("Belum ada entri data laporan untuk bulan ini.")
 else:
-    st.warning("Data karyawan tidak ditemukan database.")import streamlit as st
-import pandas as pd
-from supabase import create_client, Client
-from fpdf import FPDF
-import datetime
-import calendar
-
-# 1. Inisialisasi Supabase (Pastikan secrets sudah diatur di Streamlit Cloud)
-@st.cache_resource
-def init_supabase():
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
-
-supabase = init_supabase()
-
-# Tambahkan Judul Aplikasi
-st.title("🚂 Web Laporan Pengoperasian KAI")
-st.subheader("🔍 Rekapitulasi Data & Download PDF 4 Halaman")
-
-# 2. Ambil data karyawan untuk dropdown
-try:
-    karyawan_res = supabase.table("karyawan").select("nipp, nama").execute()
-    list_karyawan = karyawan_res.data
-except Exception as e:
-    st.error(f"Gagal mengambil data karyawan: {e}")
-    list_karyawan = []
-
-if list_karyawan:
-    dict_karyawan = {k['nama']: k['nipp'] for k in list_karyawan}
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        nama_cari = st.selectbox("Nama Karyawan", list(dict_karyawan.keys()))
-    with col2:
-        bln_cari = st.selectbox("Bulan", [f"{i:02d}" for i in range(1, 13)], index=datetime.datetime.now().month - 1)
-    with col3:
-        thn_cari = st.text_input("Tahun", value=str(datetime.datetime.now().year))
-        
-    nipp_cari = dict_karyawan[nama_cari]
-    filter_bln = f"{thn_cari}-{bln_cari}"
-    
-    # Mendapatkan hari terakhir pada bulan tersebut
-    try:
-        last_day = calendar.monthrange(int(thn_cari), int(bln_cari))[1]
-    except:
-        last_day = 31
-
-    # 3. Query Data Utama dari tabel 'laporan'
-    try:
-        res_harian = supabase.table("laporan")\
-            .select("*")\
-            .eq("nipp", nipp_cari)\
-            .gte("tanggal", f"{filter_bln}-01")\
-            .lte("tanggal", f"{filter_bln}-{last_day}")\
-            .order("tanggal")\
-            .execute()
-            
-        data_harian = res_harian.data if res_harian else []
-    except Exception as e:
-        st.error(f"Error query database: {e}")
-        data_harian = []
-
-    if data_harian:
-        df = pd.DataFrame(data_harian)
-        
-        # Skenario pencegahan KeyError: pastikan kolom tersedia atau isi dengan string kosong jika absen
-        kolom_wajib = ["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]
-        for kol in kolom_wajib:
-            if kol not in df.columns:
-                df[kol] = ""
-                
-        # Menampilkan tabel di Streamlit
-        st.dataframe(df[kolom_wajib], use_container_width=True)
-        
-        # 4. Tombol Cetak PDF
-        if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
-            # Query data tambahan untuk foto/daftar hadir jika diperlukan di PDF
-            try:
-                abs_data = supabase.table("daftar_hadir")\
-                    .select("foto_hadir_url")\
-                    .eq("nipp", nipp_cari)\
-                    .eq("bulan_tahun", filter_bln)\
-                    .execute().data
-            except Exception as e:
-                abs_data = []
-                
-            # Proses Pembuatan PDF 
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", "B", 14)
-            pdf.cell(100, 8, "LAPORAN KEGIATAN PENGOPERASIAN", ln=True)
-            pdf.set_font("Arial", "", 11)
-            pdf.cell(100, 8, f"BULAN: {bln_cari} / {thn_cari}", ln=True)
-            pdf.cell(100, 8, f"NAMA: {nama_cari} ({nipp_cari})", ln=True)
-            pdf.ln(5)
-            
-            # Header Tabel PDF
-            pdf.set_font("Arial", "B", 10)
-            pdf.cell(30, 8, "Hari / Tanggal", border=1)
-            pdf.cell(40, 8, "Kegiatan", border=1)
-            pdf.cell(50, 8, "Serah Terima Dinasan", border=1)
-            pdf.cell(60, 8, "Dokumentasi Kegiatan", border=1, ln=True)
-            
-            # Isi Tabel PDF
-            pdf.set_font("Arial", "", 9)
-            for _, row in df.iterrows():
-                pdf.cell(30, 10, str(row["tanggal"]), border=1)
-                pdf.cell(40, 10, str(row["jenis_dinasan"])[:20], border=1)
-                pdf.cell(50, 10, str(row["serah_terima"])[:25], border=1)
-                pdf.cell(60, 10, str(row["detail_kegiatan"])[:30], border=1, ln=True)
-                
-            pdf_output = pdf.output(dest='S').encode('latin-1')
-            
-            st.download_button(
-                label="📥 Download Dokumen PDF Resmi 4 Halaman",
-                data=pdf_output,
-                file_name=f"Laporan_Resmi_{nama_cari}_{filter_bln}.pdf",
-                mime="application/pdf"
-            )
-    else:
-        st.info("Belum ada entri data laporan untuk bulan ini.")
-else:
-    st.warning("Data karyawan tidak ditemukan database.")import streamlit as st
-from supabase import create_client, Client
-import pandas as pd
-from datetime import datetime
-from fpdf import FPDF
-import requests
-from io import BytesIO
-
-# --- HUBUNGKAN KE SUPABASE ---
-URL = st.secrets["SUPABASE_URL"]
-KEY = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(URL, KEY)
-
-st.set_page_config(page_title="Laporan Operasional KAI", layout="wide")
-st.title("🚂 Web Laporan Pengoperasian KAI")
-
-menu = ["Input Profil Karyawan", "Input Laporan Harian & Absensi", "Pencarian & Cetak PDF"]
-choice = st.sidebar.selectbox("Menu Utama", menu)
-
-def upload_foto(file, folder_name, file_name):
-    if file:
-        bytes_data = file.getvalue()
-        path_on_supa = f"{folder_name}/{file_name}.png"
-        supabase.storage.from_("dokumentasi").remove([path_on_supa])
-        supabase.storage.from_("dokumentasi").upload(path=path_on_supa, file=bytes_data, file_options={"content-type": "image/png"})
-        return supabase.storage.from_("dokumentasi").get_public_url(path_on_supa)
-    return None
-
-# --- MENU 1: INPUT PROFIL KARYAWAN ---
-if choice == "Input Profil Karyawan":
-    st.header("👤 Master Data Karyawan & Smartcard")
-    with st.form("form_k"):
-        nipp = st.text_input("NIPP")
-        nama = st.text_input("Nama Lengkap")
-        jabatan = st.text_input("Jabatan", value="KS DINAS / PPKA")
-        unit = st.text_input("Unit Kerja / UPT STASIUN")
-        daop = st.text_input("DAOP")
-        foto_sc = st.file_uploader("Upload / Update Foto Smartcard Kecakapan (PKA)", type=["png", "jpg", "jpeg"])
-        if st.form_submit_button("Simpan Data Karyawan"):
-            sc_url = upload_foto(foto_sc, "smartcard", f"sc_{nipp}") if foto_sc else None
-            data = {"nipp": nipp, "nama": nama, "jabatan": jabatan, "unit_kerja": unit, "daop": daop}
-            if sc_url: data["sc_url"] = sc_url
-            
-            check = supabase.table("karyawan").select("*").eq("nipp", nipp).execute()
-            if check.data:
-                supabase.table("karyawan").update(data).eq("nipp", nipp).execute()
-            else:
-                supabase.table("karyawan").insert(data).execute()
-            st.success("Data Karyawan Berhasil Disimpan!")
-
-# --- MENU 2: INPUT LAPORAN HARIAN & ABSENSI ---
-elif choice == "Input Laporan Harian & Absensi":
-    st.header("📝 Input Laporan Real-Time Dinasan")
-    k_data = supabase.table("karyawan").select("nipp, nama").execute().data
-    if not k_data:
-        st.warning("Isi data karyawan terlebih dahulu di Menu 1.")
-    else:
-        opt_k = {f"{k['nipp']} - {k['nama']}": k['nipp'] for k in k_data}
-        pilih_k = st.selectbox("Pilih Karyawan", list(opt_k.keys()))
-        nipp_terpilih = opt_k[pilih_k]
-        
-        # --- 1. UPLOAD ABSENSI BULANAN (HALAMAN 3) ---
-        st.subheader("1. Upload Absensi Bulanan (Halaman 3)")
-        bln_absensi = st.date_input("Pilih Bulan Absensi", datetime.now()).strftime("%Y-%m")
-        foto_absen = st.file_uploader("Foto Lembar Daftar Hadir Bulanan", type=["png", "jpg", "jpeg"], key="absen")
-        
-        if st.button("Simpan Absensi Bulanan", key="btn_simpan_absensi_bulanan"):
-            if foto_absen:
-                url_absen = upload_foto(foto_absen, "absensi", f"absen_{nipp_terpilih}_{bln_absensi}")
-                abs_data = {
-                    "nipp": nipp_terpilih,
-                    "bulan_tahun": bln_absensi,
-                    "foto_hadir_url": url_absen
-                }
-                check_a = supabase.table("daftar_hadir").select("*").eq("nipp", nipp_terpilih).eq("bulan_tahun", bln_absensi).execute()
-                if check_a.data:
-                    supabase.table("daftar_hadir").update(abs_data).eq("nipp", nipp_terpilih).eq("bulan_tahun", bln_absensi).execute()
-                else:
-                    supabase.table("daftar_hadir").insert(abs_data).execute()
-                st.success("Data Absensi Bulanan Berhasil Disimpan!")
-            else:
-                st.error("Silakan unggah foto lembar daftar hadir terlebih dahulu.")
-        
-        st.markdown("---")
-        
-        # --- 2. INPUT GIAT HARIAN & DOKUMENTASI (HALAMAN 4) ---
-        st.subheader("2. Input Giat Harian & Dokumentasi (Halaman 4)")
-        tgl = st.date_input("Tanggal Dinasan", datetime.now()).strftime("%Y-%m-%d")
-        jns = st.selectbox("Jenis Dinasan", ["DINAS KS", "DINAS PPKA PAGI", "DINAS PPKA SIANG", "DINAS PPKA MALAM", "LIBUR", "CUTI", "SAKIT", "SERTIFIKASI", "PEMBINAAN", "DINAS LUAR"])
-        keg = st.text_area("Detail Kegiatan / Dinasan")
-        serah = st.text_area("Serah Terima Dinasan")
-        f1 = st.file_uploader("Foto Dokumentasi Kegiatan 1", type=["png", "jpg", "jpeg"], key="f1")
-        f2 = st.file_uploader("Foto Dokumentasi Kegiatan 2", type=["png", "jpg", "jpeg"], key="f2")
-        
-        if st.button("Simpan Laporan Harian", key="btn_simpan_laporan_harian_input"):
-            url_f1 = upload_foto(f1, "harian", f"f1_{nipp_terpilih}_{tgl}") if f1 else None
-            url_f2 = upload_foto(f2, "harian", f"f2_{nipp_terpilih}_{tgl}") if f2 else None
-            
-            # Menyesuaikan nama kolom dengan struktur pemanggilan PDF (foto1_url & foto2_url)
-            harian_data = {
-                "nipp": nipp_terpilih, 
-                "tanggal": str(tgl), 
-                "jenis_dinasan": jns, 
-                "detail_kegiatan": keg, 
-                "serah_terima": serah, 
-                "foto1_url": url_f1,
-                "foto2_url": url_f2
-            }
-            
-            check_h = supabase.table("laporan").select("*").eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
-            if check_h.data:
-                supabase.table("laporan").update(harian_data).eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
-            else:
-                supabase.table("laporan").insert(harian_data).execute()
-            st.success("Laporan harian berhasil disimpan!")
-
-# --- MENU 3: PENCARIAN & CETAK PDF ---
-elif choice == "Pencarian & Cetak PDF":
-    st.header("🔍 Rekapitulasi Data & Download PDF 4 Halaman")
-    k_data = supabase.table("karyawan").select("nipp, nama").execute().data
-    if k_data:
-        opt_k = {k['nama']: k['nipp'] for k in k_data}
-        c1, c2, c3 = st.columns(3)
-        with c1: nama_cari = st.selectbox("Nama Karyawan", list(opt_k.keys()))
-        with c2: bln_cari = st.selectbox("Bulan", [f"{i:02d}" for i in range(1,13)], index=datetime.now().month-1)
-        with c3: thn_cari = st.text_input("Tahun", value=str(datetime.now().year))
-        
-        nipp_cari = opt_k[nama_cari]
-        filter_bln = f"{thn_cari}-{bln_cari}"
-        
-        if bln_cari in ["01", "03", "05", "07", "08", "10", "12"]:
-            last_day = "31"
-        elif bln_cari == "02":
-            last_day = "29" if int(thn_cari) % 4 == 0 else "28"
-        else:
-            last_day = "30"
-        
-        prof = supabase.table("karyawan").select("*").eq("nipp", nipp_cari).single().execute().data
-        res_harian = supabase.table("laporan").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("tanggal", f"{filter_bln}-{last_day}").order("tanggal").execute()
-        
-        if res_harian.data:
-            df = pd.DataFrame(res_harian.data)
-            
-            # Tampilkan kolom yang aman bagi user jika kolom baru belum terisi menyeluruh
-            show_cols = [c for c in ["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"] if c in df.columns]
-            st.dataframe(df[show_cols], use_container_width=True)
-            
-            if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
-                pdf = FPDF()
-                
-                # ================= HALAMAN 1: COVER LAYOUT KANAN KERETA =================
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 14)
-                pdf.cell(100, 8, "LAPORAN KEGIATAN PENGOPERASIAN", ln=True)
-                pdf.set_font("Arial", '', 11)
-                pdf.cell(100, 8, f"BULAN: {filter_bln.upper()}", ln=True)
-                pdf.ln(25)
-                
-                pdf.set_font("Arial", 'B', 10)
-                labels = [("NAMA", prof['nama']), ("NIPP", prof['nipp']), ("JABATAN", prof['jabatan']), ("UNIT KERJA", prof['unit_kerja']), ("DAOP", prof['daop'])]
-                for label, val in labels:
-                    pdf.cell(30, 10, label, ln=False)
-                    pdf.cell(5, 10, ":", ln=False)
-                    pdf.set_font("Arial", '', 10)
-                    pdf.cell(65, 10, str(val), ln=True)
-                    pdf.set_font("Arial", 'B', 10)
-                
-                try:
-                    url_kereta = "https://images.unsplash.com/photo-1532103054090-334e6e60b77a?q=80&w=600&auto=format&fit=crop"
-                    res_k = requests.get(url_kereta)
-                    pdf.image(BytesIO(res_k.content), x=110, y=35, w=85, h=130)
-                except:
-                    pass
-                
-                # ================= HALAMAN 2: FOTO SMARTCARD =================
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 12)
-                pdf.cell(200, 10, "FOTO SMARTCARD", ln=True, align='C')
-                pdf.ln(10)
-                if prof.get('sc_url'):
-                    res = requests.get(prof['sc_url'])
-                    pdf.image(BytesIO(res.content), x=25, y=40, w=160, h=100)
-                else:
-                    pdf.cell(200, 10, "[Belum ada lampiran Smartcard PKA]", align='C')
-                
-                # ================= HALAMAN 3: DAFTAR HADIR BULANAN =================
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 12)
-                pdf.cell(200, 10, f"DAFTAR HADIR BULAN {filter_bln}", ln=True, align='C')
-                pdf.ln(10)
-                abs_data = supabase.table("daftar_hadir").select("foto_hadir_url").eq("nipp", nipp_cari).eq("bulan_tahun", filter_bln).execute().data
-                if abs_data and abs_data[0]['foto_hadir_url']:
-                    res = requests.get(abs_data[0]['foto_hadir_url'])
-                    pdf.image(BytesIO(res.content), x=12, y=35, w=186, h=140)
-                else:
-                    pdf.cell(200, 10, "[Belum ada lampiran Daftar Hadir Bulanan]", align='C')
-                
-                # ================= HALAMAN 4: TABEL STRUKTUR KRONOLOGIS =================
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 12)
-                pdf.cell(200, 10, "REKAPITULASI LAPORAN REAL-TIME", ln=True, align='C')
-                pdf.ln(5)
-                
-                pdf.set_font("Arial", 'B', 9)
-                pdf.cell(25, 10, "Hari / Tanggal", border=1, align='C')
-                pdf.cell(42, 10, "Kegiatan", border=1, align='C')
-                pdf.cell(48, 10, "Serah Terima Dinasan", border=1, align='C')
-                pdf.cell(75, 10, "Dokumentasi Kegiatan", border=1, ln=True, align='C')
-                
-                pdf.set_font("Arial", '', 8)
-                row_height = 32
-                
-                for r in res_harian.data:
-                    if pdf.get_y() + row_height > 275:
-                        pdf.add_page()
-                        pdf.set_font("Arial", 'B', 9)
-                        pdf.cell(25, 10, "Hari / Tanggal", border=1, align='C')
-                        pdf.cell(42, 10, "Kegiatan", border=1, align='C')
-                        pdf.cell(48, 10, "Serah Terima Dinasan", border=1, align='C')
-                        pdf.cell(75, 10, "Dokumentasi Kegiatan", border=1, ln=True, align='C')
-                        pdf.set_font("Arial", '', 8)
-
-                    x = pdf.get_x()
-                    y = pdf.get_y()
-                    
-                    pdf.rect(x, y, 25, row_height)
-                    pdf.set_xy(x, y + 12)
-                    pdf.cell(25, 5, str(r['tanggal']), border=0, align='C')
-                    
-                    pdf.set_xy(x + 25, y + 2)
-                    pdf.multi_cell(42, 5, str(r['detail_kegiatan'])[:70], border=0, align='L')
-                    pdf.rect(x + 25, y, 42, row_height)
-                    
-                    pdf.set_xy(x + 67, y + 2)
-                    pdf.multi_cell(48, 5, str(r['serah_terima'])[:80], border=0, align='L')
-                    pdf.rect(x + 67, y, 48, row_height)
-                    
-                    pdf.rect(x + 115, y, 75, row_height)
-                    
-                    # Logika render gambar berdasarkan data foto1_url dan foto2_url yang valid
-                    has_image = False
-                    if str(r.get('foto1_url', '')).startswith("http"):
-                        try:
-                            res1 = requests.get(r['foto1_url'])
-                            pdf.image(BytesIO(res1.content), x=x+118, y=y+3, w=32, h=26)
-                            has_image = True
-                        except:
-                            pass
-                            
-                    if str(r.get('foto2_url', '')).startswith("http"):
-                        try:
-                            res2 = requests.get(r['foto2_url'])
-                            pdf.image(BytesIO(res2.content), x=x+154, y=y+3, w=32, h=26)
-                            has_image = True
-                        except:
-                            pass
-                    
-                    # Jika tidak ada foto sama sekali, baru tampilkan status Jenis Dinasan (misal: LIBUR, SAKIT, CUTI)
-                    if not has_image:
-                        pdf.set_font("Arial", 'B', 10)
-                        pdf.set_xy(x + 115, y + 12)
-                        pdf.cell(75, 5, str(r.get('jenis_dinasan', '-')), border=0, align='C')
-                        pdf.set_font("Arial", '', 8)
-                        
-                    pdf.set_y(y + row_height)
-                
-                pdf_output = BytesIO()
-                pdf.output(pdf_output)
-                st.download_button(label="📥 Download Dokumen PDF Resmi 4 Halaman", data=pdf_output.getvalue(), file_name=f"Laporan_Resmi_{nama_cari}_{filter_bln}.pdf", mime="application/pdf")
-        else:
-            st.warning("⚠️ Data laporan tidak ditemukan untuk karyawan, bulan, dan tahun yang dipilih.")
-    else:
-        st.info("Belum ada entri data laporan untuk bulan ini.")import streamlit as st
-from supabase import create_client, Client
-import pandas as pd
-from datetime import datetime
-from fpdf import FPDF
-import requests
-from io import BytesIO
-
-# --- HUBUNGKAN KE SUPABASE ---
-URL = st.secrets["SUPABASE_URL"]
-KEY = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(URL, KEY)
-
-st.set_page_config(page_title="Laporan Operasional KAI", layout="wide")
-st.title("🚂 Web Laporan Pengoperasian KAI")
-
-menu = ["Input Profil Karyawan", "Input Laporan Harian & Absensi", "Pencarian & Cetak PDF"]
-choice = st.sidebar.selectbox("Menu Utama", menu)
-
-def upload_foto(file, folder_name, file_name):
-    if file:
-        bytes_data = file.getvalue()
-        path_on_supa = f"{folder_name}/{file_name}.png"
-        supabase.storage.from_("dokumentasi").remove([path_on_supa])
-        supabase.storage.from_("dokumentasi").upload(path=path_on_supa, file=bytes_data, file_options={"content-type": "image/png"})
-        return supabase.storage.from_("dokumentasi").get_public_url(path_on_supa)
-    return None
-
-# --- MENU 1: INPUT PROFIL KARYAWAN ---
-if choice == "Input Profil Karyawan":
-    st.header("👤 Master Data Karyawan & Smartcard")
-    with st.form("form_k"):
-        nipp = st.text_input("NIPP")
-        nama = st.text_input("Nama Lengkap")
-        jabatan = st.text_input("Jabatan", value="KS DINAS / PPKA")
-        unit = st.text_input("Unit Kerja / UPT STASIUN")
-        daop = st.text_input("DAOP")
-        foto_sc = st.file_uploader("Upload / Update Foto Smartcard Kecakapan (PKA)", type=["png", "jpg", "jpeg"])
-        if st.form_submit_button("Simpan Data Karyawan"):
-            sc_url = upload_foto(foto_sc, "smartcard", f"sc_{nipp}") if foto_sc else None
-            data = {"nipp": nipp, "nama": nama, "jabatan": jabatan, "unit_kerja": unit, "daop": daop}
-            if sc_url: data["sc_url"] = sc_url
-            
-            check = supabase.table("karyawan").select("*").eq("nipp", nipp).execute()
-            if check.data:
-                supabase.table("karyawan").update(data).eq("nipp", nipp).execute()
-            else:
-                supabase.table("karyawan").insert(data).execute()
-            st.success("Data Karyawan Berhasil Disimpan!")
-
-# --- MENU 2: INPUT LAPORAN HARIAN & ABSENSI ---
-elif choice == "Input Laporan Harian & Absensi":
-    st.header("📝 Input Laporan Real-Time Dinasan")
-    k_data = supabase.table("karyawan").select("nipp, nama").execute().data
-    if not k_data:
-        st.warning("Isi data karyawan terlebih dahulu di Menu 1.")
-    else:
-        opt_k = {f"{k['nipp']} - {k['nama']}": k['nipp'] for k in k_data}
-        pilih_k = st.selectbox("Pilih Karyawan", list(opt_k.keys()))
-        nipp_terpilih = opt_k[pilih_k]
-        
-        st.subheader("1. Upload Absensi Bulanan (Halaman 3)")
-        bln_absensi = st.date_input("Pilih Bulan Absensi", datetime.now()).strftime("%Y-%m")
-        foto_absen = st.file_uploader("Foto Lembar Daftar Hadir Bulanan", type=["png", "jpg", "jpeg"], key="absen")
-        if st.button("Simpan Laporan Harian"):
-            url_f1 = upload_foto(f1, "harian", f"f1_{nipp_terpilih}_{tgl}") if f1 else jns
-            url_f2 = upload_foto(f2, "harian", f"f2_{nipp_terpilih}_{tgl}") if f2 else jns
-            
-            # --- PERBAIKAN NAMA KOLOM DI SINI ---
-            harian_data = {
-                "nipp": nipp_terpilih, 
-                "tanggal": str(tgl), 
-                "jenis_dinasan": jns, 
-                "detail_kegiatan": keg, 
-                "serah_terima": serah, 
-                "foto1_url": url_f1, 
-                "foto2_url": url_f2
-            }
-            
-            check_h = supabase.table("laporan").select("*").eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
-            if check_h.data:
-                supabase.table("laporan").update(harian_data).eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
-            else:
-                supabase.table("laporan").insert(harian_data).execute()
-            st.success("Laporan harian berhasil disimpan!")
-        
-        st.markdown("---")
-        st.subheader("2. Input Giat Harian & Dokumentasi (Halaman 4)")
-        tgl = st.date_input("Tanggal Dinasan", datetime.now()).strftime("%Y-%m-%d")
-        jns = st.selectbox("Jenis Dinasan", ["DINAS KS", "DINAS PPKA PAGI", "DINAS PPKA SIANG", "DINAS PPKA MALAM", "LIBUR", "CUTI", "SAKIT", "SERTIFIKASI", "PEMBINAAN", "DINAS LUAR"])
-        keg = st.text_area("Detail Kegiatan / Dinasan")
-        serah = st.text_area("Serah Terima Dinasan")
-        f1 = st.file_uploader("Foto Dokumentasi Kegiatan 1", type=["png", "jpg", "jpeg"], key="f1")
-        f2 = st.file_uploader("Foto Dokumentasi Kegiatan 2", type=["png", "jpg", "jpeg"], key="f2")
-        
-        if st.button("Simpan Laporan Harian", key="btn_simpan_laporan_harian_input"):
-            url_f1 = upload_foto(f1, "harian", f"f1_{nipp_terpilih}_{tgl}") if f1 else jns
-            url_f2 = upload_foto(f2, "harian", f"f2_{nipp_terpilih}_{tgl}") if f2 else jns
-            
-            harian_data = {"nipp": nipp_terpilih, "tanggal": str(tgl), "jenis_dinasan": jns, "detail_kegiatan": keg, "serah_terima": serah, "dok_url": url_f1}
-            check_h = supabase.table("laporan").select("*").eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
-            if check_h.data:
-                supabase.table("laporan").update(harian_data).eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
-            else:
-                supabase.table("laporan").insert(harian_data).execute()
-            st.success("Laporan harian berhasil disimpan!")
-
-# --- MENU 3: PENCARIAN & CETAK PDF TEMPLATE PERSIS ---
-elif choice == "Pencarian & Cetak PDF":
-    st.header("🔍 Rekapitulasi Data & Download PDF 4 Halaman")
-    k_data = supabase.table("karyawan").select("nipp, nama").execute().data
-    if k_data:
-        opt_k = {k['nama']: k['nipp'] for k in k_data}
-        c1, c2, c3 = st.columns(3)
-        with c1: nama_cari = st.selectbox("Nama Karyawan", list(opt_k.keys()))
-        with c2: bln_cari = st.selectbox("Bulan", [f"{i:02d}" for i in range(1,13)], index=datetime.now().month-1)
-        with c3: thn_cari = st.text_input("Tahun", value=str(datetime.now().year))
-        
-        nipp_cari = opt_k[nama_cari]
-        filter_bln = f"{thn_cari}-{bln_cari}"
-        
-        if bln_cari in ["01", "03", "05", "07", "08", "10", "12"]:
-            last_day = "31"
-        elif bln_cari == "02":
-            last_day = "29" if int(thn_cari) % 4 == 0 else "28"
-        else:
-            last_day = "30"
-        
-        prof = supabase.table("karyawan").select("*").eq("nipp", nipp_cari).single().execute().data
-        res_harian = supabase.table("laporan").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("tanggal", f"{filter_bln}-{last_day}").order("tanggal").execute()
-        # --- PERBAIKAN INDENTASI & LOGIKA DI BAWAH INI ---
-        if res_harian.data:
-            df = pd.DataFrame(res_harian.data)
-            
-            st.dataframe(df[["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]], use_container_width=True)
-            
-            if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
-                pdf = FPDF()
-                
-                # ================= HALAMAN 1: COVER LAYOUT KANAN KERETA =================
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 14)
-                pdf.cell(100, 8, "LAPORAN KEGIATAN PENGOPERASIAN", ln=True)
-                pdf.set_font("Arial", '', 11)
-                pdf.cell(100, 8, f"BULAN: {filter_bln.upper()}", ln=True)
-                pdf.ln(25)
-                
-                pdf.set_font("Arial", 'B', 10)
-                labels = [("NAMA", prof['nama']), ("NIPP", prof['nipp']), ("JABATAN", prof['jabatan']), ("UNIT KERJA", prof['unit_kerja']), ("DAOP", prof['daop'])]
-                for label, val in labels:
-                    pdf.cell(30, 10, label, ln=False)
-                    pdf.cell(5, 10, ":", ln=False)
-                    pdf.set_font("Arial", '', 10)
-                    pdf.cell(65, 10, str(val), ln=True)
-                    pdf.set_font("Arial", 'B', 10)
-                
-                try:
-                    url_kereta = "https://images.unsplash.com/photo-1532103054090-334e6e60b77a?q=80&w=600&auto=format&fit=crop"
-                    res_k = requests.get(url_kereta)
-                    pdf.image(BytesIO(res_k.content), x=110, y=35, w=85, h=130)
-                except:
-                    pass
-                
-                # ================= HALAMAN 2: FOTO SMARTCARD =================
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 12)
-                pdf.cell(200, 10, "FOTO SMARTCARD", ln=True, align='C')
-                pdf.ln(10)
-                if prof.get('sc_url'):
-                    res = requests.get(prof['sc_url'])
-                    pdf.image(BytesIO(res.content), x=25, y=40, w=160, h=100)
-                else:
-                    pdf.cell(200, 10, "[Belum ada lampiran Smartcard PKA]", align='C')
-                
-                # ================= HALAMAN 3: DAFTAR HADIR BULANAN =================
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 12)
-                pdf.cell(200, 10, f"DAFTAR HADIR BULAN {filter_bln}", ln=True, align='C')
-                pdf.ln(10)
-                abs_data = supabase.table("daftar_hadir").select("foto_hadir_url").eq("nipp", nipp_cari).eq("bulan_tahun", filter_bln).execute().data
-                if abs_data and abs_data[0]['foto_hadir_url']:
-                    res = requests.get(abs_data[0]['foto_hadir_url'])
-                    pdf.image(BytesIO(res.content), x=12, y=35, w=186, h=140)
-                else:
-                    pdf.cell(200, 10, "[Belum ada lampiran Daftar Hadir Bulanan]", align='C')
-                
-                # ================= HALAMAN 4: TABEL STRUKTUR KRONOLOGIS =================
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 12)
-                pdf.cell(200, 10, "REKAPITULASI LAPORAN REAL-TIME", ln=True, align='C')
-                pdf.ln(5)
-                
-                pdf.set_font("Arial", 'B', 9)
-                pdf.cell(25, 10, "Hari / Tanggal", border=1, align='C')
-                pdf.cell(42, 10, "Kegiatan", border=1, align='C')
-                pdf.cell(48, 10, "Serah Terima Dinasan", border=1, align='C')
-                pdf.cell(75, 10, "Dokumentasi Kegiatan", border=1, ln=True, align='C')
-                
-                pdf.set_font("Arial", '', 8)
-                row_height = 32
-                
-                # --- PERBAIKAN LOOPING .data DI SINI ---
-                for r in res_harian.data:
-                    if pdf.get_y() + row_height > 275:
-                        pdf.add_page()
-                        pdf.set_font("Arial", 'B', 9)
-                        pdf.cell(25, 10, "Hari / Tanggal", border=1, align='C')
-                        pdf.cell(42, 10, "Kegiatan", border=1, align='C')
-                        pdf.cell(48, 10, "Serah Terima Dinasan", border=1, align='C')
-                        pdf.cell(75, 10, "Dokumentasi Kegiatan", border=1, ln=True, align='C')
-                        pdf.set_font("Arial", '', 8)
-
-                    x = pdf.get_x()
-                    y = pdf.get_y()
-                    
-                    pdf.rect(x, y, 25, row_height)
-                    pdf.set_xy(x, y + 12)
-                    pdf.cell(25, 5, str(r['tanggal']), border=0, align='C')
-                    
-                    # --- PERBAIKAN KOLOM detail_kegiatan DI SINI ---
-                    pdf.set_xy(x + 25, y + 2)
-                    pdf.multi_cell(42, 5, str(r['detail_kegiatan'])[:70], border=0, align='L')
-                    pdf.rect(x + 25, y, 42, row_height)
-                    
-                    pdf.set_xy(x + 67, y + 2)
-                    pdf.multi_cell(48, 5, str(r['serah_terima'])[:80], border=0, align='L')
-                    pdf.rect(x + 67, y, 48, row_height)
-                    
-                    pdf.rect(x + 115, y, 75, row_height)
-                    if str(r.get('foto1_url', '')).startswith("http"):
-                        try:
-                            res1 = requests.get(r['foto1_url'])
-                            pdf.image(BytesIO(res1.content), x=x+118, y=y+3, w=32, h=26)
-                        except:
-                            pdf.set_xy(x + 115, y + 12)
-                            pdf.cell(35, 5, "[Gagal Load]", align='C')
-                            
-                        if str(r.get('foto2_url', '')).startswith("http"):
-                            try:
-                                res2 = requests.get(r['foto2_url'])
-                                pdf.image(BytesIO(res2.content), x=x+154, y=y+3, w=32, h=26)
-                            except:
-                                pass
-                    else:
-                        pdf.set_font("Arial", 'B', 10)
-                        pdf.set_xy(x + 115, y + 12)
-                        pdf.cell(75, 5, str(r.get('jenis_dinasan', '-')), border=0, align='C')
-                        pdf.set_font("Arial", '', 8)
-                        
-                    pdf.set_y(y + row_height)
-                
-                pdf_output = BytesIO()
-                pdf.output(pdf_output)
-                st.download_button(label="📥 Download Dokumen PDF Resmi 4 Halaman", data=pdf_output.getvalue(), file_name=f"Laporan_Resmi_{nama_cari}_{filter_bln}.pdf", mime="application/pdf")
-        else:
-            st.warning("⚠️ Data laporan tidak ditemukan untuk karyawan, bulan, dan tahun yang dipilih.")
-    else:
-        st.info("Belum ada entri data laporan untuk bulan ini.")
+    st.warning("Data karyawan tidak ditemukan di database.")
