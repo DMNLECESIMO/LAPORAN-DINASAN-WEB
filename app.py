@@ -104,7 +104,7 @@ elif choice == "Pencarian & Cetak PDF":
         filter_bln = f"{thn_cari}-{bln_cari}"
         
         prof = supabase.table("karyawan").select("*").eq("nipp", nipp_cari).single().execute().data
-        res_harian = supabase.table("dinasan_harian").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("tanggal", f"{filter_bln}-31").order("tanggal").execute().data
+        res_harian = supabase.table("laporan").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("tanggal", f"{filter_bln}-31").order("tanggal").execute().data
         
         if res_harian:
             df = pd.DataFrame(res_harian)
