@@ -62,11 +62,27 @@ elif choice == "Input Laporan Harian & Absensi":
         st.subheader("1. Upload Absensi Bulanan (Halaman 3)")
         bln_absensi = st.date_input("Pilih Bulan Absensi", datetime.now()).strftime("%Y-%m")
         foto_absen = st.file_uploader("Foto Lembar Daftar Hadir Bulanan", type=["png", "jpg", "jpeg"], key="absen")
-        if st.button("Simpan Absensi Bulanan"):
-            if foto_absen:
-                url_absen = upload_foto(foto_absen, "absensi", f"abs_{nipp_terpilih}_{bln_absensi}")
-                supabase.table("daftar_hadir").insert({"nipp": nipp_terpilih, "bulan_tahun": bln_absensi, "foto_hadir_url": url_absen}).execute()
-                st.success("Daftar hadir bulanan berhasil tersimpan!")
+        if st.button("Simpan Laporan Harian"):
+            url_f1 = upload_foto(f1, "harian", f"f1_{nipp_terpilih}_{tgl}") if f1 else jns
+            url_f2 = upload_foto(f2, "harian", f"f2_{nipp_terpilih}_{tgl}") if f2 else jns
+            
+            # --- PERBAIKAN NAMA KOLOM DI SINI ---
+            harian_data = {
+                "nipp": nipp_terpilih, 
+                "tanggal": str(tgl), 
+                "jenis_dinasan": jns, 
+                "detail_kegiatan": keg, 
+                "serah_terima": serah, 
+                "foto1_url": url_f1, 
+                "foto2_url": url_f2
+            }
+            
+            check_h = supabase.table("laporan").select("*").eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
+            if check_h.data:
+                supabase.table("laporan").update(harian_data).eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
+            else:
+                supabase.table("laporan").insert(harian_data).execute()
+            st.success("Laporan harian berhasil disimpan!")
         
         st.markdown("---")
         st.subheader("2. Input Giat Harian & Dokumentasi (Halaman 4)")
