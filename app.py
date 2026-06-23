@@ -114,8 +114,14 @@ elif choice == "Pencarian & Cetak PDF":
         res_harian = supabase.table("laporan").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("tanggal", f"{filter_bln}-{last_day}").order("tanggal").execute()
         
         if res_harian:
-            df = pd.DataFrame(res_harian)
-            st.dataframe(df[["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]], use_container_width=True)
+           df = pd.DataFrame(res_harian.data)
+
+# KODE BARU: Cek jika data kosong, hentikan proses dengan pesan ramah
+if df.empty:
+    st.warning("⚠️ Data laporan tidak ditemukan untuk karyawan, bulan, dan tahun yang dipilih.")
+    st.stop()
+
+st.dataframe(df[["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]], use_container_width=True)
             
             if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
                 pdf = FPDF()
