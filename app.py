@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from supabase import create_client, Client
+from supabase import create_client
 from fpdf import FPDF
 import datetime
 import calendar
@@ -14,178 +14,100 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# 2. Membuat Struktur Navigasi Sidebar (Semua menu lengkap & aman)
+# 2. Struktur Menu Navigasi Sidebar (Lengkap)
 st.sidebar.title("Navigasi Aplikasi")
 menu = st.sidebar.selectbox(
     "Menu Utama", 
     ["Beranda", "Input Data Karyawan", "Input Laporan Harian", "Pencarian & Cetak PDF"]
 )
 
-# ==================== HALAMAN 1: BERANDA ====================
+# ==========================================================
+# HALAMAN 1: BERANDA
+# ==========================================================
 if menu == "Beranda":
-    st.title("Web Laporan Pengoperasian KAI")
-    st.write("Sistem manajemen data operasional dinasan dan rekapitulasi laporan resmi.")
-    st.info("Silakan pilih menu di samping kiri untuk menginput data atau mencetak PDF.")
+    st.title("🚂 Sistem Web Laporan Pengoperasian KAI")
+    st.write("Selamat datang di sistem manajemen data dinasan.")
+    st.info("Pilih menu di sidebar untuk melakukan input data atau mencetak laporan.")
 
-# ==================== HALAMAN 2: INPUT DATA KARYAWAN ====================
+# ==========================================================
+# HALAMAN 2: INPUT DATA KARYAWAN
+# ==========================================================
 elif menu == "Input Data Karyawan":
-    st.title("Input Data Karyawan Baru")
-    
+    st.title("👥 Input Data Karyawan Baru")
     with st.form("form_karyawan", clear_on_submit=True):
-        nipp_input = st.text_input("NIPP Karyawan")
-        nama_input = st.text_input("Nama Lengkap Karyawan")
-        submit_karyawan = st.form_submit_button("Simpan Data Karyawan")
-        
-        if submit_karyawan:
-            if nipp_input and nama_input:
-                try:
-                    supabase.table("karyawan").insert({"nipp": nipp_input, "nama": nama_input}).execute()
-                    st.success(f"Berhasil menambahkan karyawan: {nama_input}")
-                except Exception as e:
-                    st.error(f"Gagal menyimpan ke database: {e}")
+        nipp = st.text_input("NIPP Karyawan")
+        nama = st.text_input("Nama Lengkap")
+        if st.form_submit_button("Simpan Data Karyawan"):
+            if nipp and nama:
+                supabase.table("karyawan").insert({"nipp": nipp, "nama": nama}).execute()
+                st.success(f"Karyawan {nama} berhasil disimpan.")
             else:
-                st.warning("Mohon isi semua kolom terlebih dahulu.")
+                st.warning("Mohon isi semua kolom.")
 
-# ==================== HALAMAN 3: INPUT LAPORAN HARIAN ====================
+# ==========================================================
+# HALAMAN 3: INPUT LAPORAN HARIAN
+# ==========================================================
 elif menu == "Input Laporan Harian":
-    st.title("Input Laporan Harian Dinasan")
+    st.title("📝 Input Laporan Harian")
+    karyawan = supabase.table("karyawan").select("nipp, nama").execute().data
+    dict_kry = {k['nama']: k['nipp'] for k in karyawan}
     
-    try:
-        karyawan_res = supabase.table("karyawan").select("nipp, nama").execute()
-        list_karyawan = karyawan_res.data
-    except:
-        list_karyawan = []
+    with st.form("form_laporan", clear_on_submit=True):
+        nama_pilih = st.selectbox("Pilih Karyawan", list(dict_kry.keys()))
+        tgl = st.date_input("Tanggal")
+        jenis = st.text_input("Jenis Dinasan")
+        kegiatan = st.text_area("Detail Kegiatan")
+        serah = st.text_input("Serah Terima")
         
-    if list_karyawan:
-        dict_karyawan = {k['nama']: k['nipp'] for k in list_karyawan}
-        
-        with st.form("form_laporan", clear_on_submit=True):
-            nama_pilih = st.selectbox("Nama Karyawan", list(dict_karyawan.keys()))
-            tgl_input = st.date_input("Tanggal Kegiatan", datetime.date.today())
-            jenis_dinasan = st.text_input("Jenis Dinasan (Contoh: DINAS PPKA PAGI)")
-            detail_kegiatan = st.text_area("Detail Kegiatan")
-            serah_terima = st.text_input("Serah Terima Dinasan")
-            submit_laporan = st.form_submit_button("Simpan Laporan Harian")
-            
-            if submit_laporan:
-                nipp_pilih = dict_karyawan[nama_pilih]
-                try:
-                    supabase.table("laporan").insert({
-                        "nipp": nipp_pilih,
-                        "tanggal": str(tgl_input),
-                        "jenis_dinasan": jenis_dinasan,
-                        "detail_kegiatan": detail_kegiatan,
-                        "serah_terima": serah_terima
-                    }).execute()
-                    st.success("Laporan harian berhasil disimpan ke database!")
-                except Exception as e:
-                    st.error(f"Gagal menyimpan laporan: {e}")
-    else:
-        st.warning("Data karyawan belum tersedia. Mohon isi data karyawan terlebih dahulu.")
+        if st.form_submit_button("Simpan Laporan Harian"):
+            supabase.table("laporan").insert({
+                "nipp": dict_kry[nama_pilih], 
+                "tanggal": str(tgl), 
+                "jenis_dinasan": jenis,
+                "detail_kegiatan": kegiatan,
+                "serah_terima": serah
+            }).execute()
+            st.success("Laporan berhasil tersimpan!")
 
-# ==================== HALAMAN 4: PENCARIAN & CETAK PDF ====================
+# ==========================================================
+# HALAMAN 4: PENCARIAN & CETAK PDF (STABIL)
+# ==========================================================
 elif menu == "Pencarian & Cetak PDF":
-    st.title("Web Laporan Pengoperasian KAI")
-    st.subheader("Rekapitulasi Data & Download PDF 4 Halaman")
+    st.title("🚂 Web Laporan Pengoperasian KAI")
+    st.subheader("🔍 Rekapitulasi Data & Download PDF")
 
-    try:
-        karyawan_res = supabase.table("karyawan").select("nipp, nama").execute()
-        list_karyawan = karyawan_res.data
-    except Exception as e:
-        st.error(f"Gagal mengambil data karyawan: {e}")
-        list_karyawan = []
-
-    if list_karyawan:
-        dict_karyawan = {k['nama']: k['nipp'] for k in list_karyawan}
+    # Pencarian
+    col1, col2 = st.columns(2)
+    with col1:
+        thn = st.text_input("Tahun", value=str(datetime.datetime.now().year))
+    with col2:
+        bln = st.selectbox("Bulan", [f"{i:02d}" for i in range(1, 13)])
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            nama_cari = st.selectbox("Nama Karyawan", list(dict_karyawan.keys()), key="sb_cari_nama")
-        with col2:
-            bln_cari = st.selectbox("Bulan", [f"{i:02d}" for i in range(1, 13)], index=datetime.datetime.now().month - 1, key="sb_cari_bln")
-        with col3:
-            thn_cari = st.text_input("Tahun", value=str(datetime.datetime.now().year), key="ti_cari_thn")
-            
-        nipp_cari = dict_karyawan[nama_cari]
-        filter_bln = f"{thn_cari}-{bln_cari}"
+    if st.button("Tampilkan Data"):
+        res = supabase.table("laporan").select("*").execute().data
+        df = pd.DataFrame(res)
+        st.dataframe(df)
+        # Simpan ke session_state agar PDF tetap bisa dibuat setelah tombol klik
+        st.session_state['df_report'] = df
+        st.session_state['ready_pdf'] = True
+
+    # Tombol download diletakkan di luar blok pencarian agar stabil
+    if st.session_state.get('ready_pdf'):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(200, 10, "LAPORAN DINASAN", ln=True, align='C')
+        pdf.set_font("Arial", size=10)
         
-        try:
-            last_day = calendar.monthrange(int(thn_cari), int(bln_cari))[1]
-        except:
-            last_day = 31
-
-        try:
-            res_harian = supabase.table("laporan")\
-                .select("*")\
-                .eq("nipp", nipp_cari)\
-                .gte("tanggal", f"{filter_bln}-01")\
-                .lte("tanggal", f"{filter_bln}-{last_day}")\
-                .order("tanggal")\
-                .execute()
-                
-            data_harian = res_harian.data if res_harian else []
-        except Exception as e:
-            st.error(f"Error query database: {e}")
-            data_harian = []
-
-        if data_harian:
-            df = pd.DataFrame(data_harian)
+        for _, row in st.session_state['df_report'].iterrows():
+            txt = f"Tanggal: {row.get('tanggal')} | Kegiatan: {row.get('jenis_dinasan')}"
+            pdf.cell(200, 8, txt, ln=True)
             
-            kolom_wajib = ["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]
-            for kol in kolom_wajib:
-                if kol not in df.columns:
-                    df[kol] = ""
-                    
-            st.dataframe(df[kolom_wajib], use_container_width=True)
-            
-            if st.button("Cetak PDF Resmi", key="btn_cetak_pdf_utama"):
-                pdf = FPDF()
-                pdf.add_page()
-                
-                # Judul PDF
-                pdf.set_font("Arial", "B", 14)
-                pdf.cell(190, 8, "REKAPITULASI LAPORAN REAL-TIME", ln=True, align='C')
-                pdf.ln(5)
-                
-                # Informasi Karyawan
-                pdf.set_font("Arial", "", 10)
-                pdf.cell(30, 6, f"Nama: {nama_cari}", ln=True)
-                pdf.cell(30, 6, f"NIPP: {nipp_cari}", ln=True)
-                pdf.cell(30, 6, f"Periode: {bln_cari}-{thn_cari}", ln=True)
-                pdf.ln(5)
-                
-                # Header Tabel PDF
-                pdf.set_font("Arial", "B", 10)
-                pdf.cell(30, 8, "Hari/Tanggal", border=1, align='C')
-                pdf.cell(50, 8, "Kegiatan", border=1, align='C')
-                pdf.cell(50, 8, "Serah Terima", border=1, align='C')
-                pdf.cell(60, 8, "Detail/Dokumentasi", border=1, ln=True, align='C')
-                
-                # Isi Baris Tabel PDF
-                pdf.set_font("Arial", "", 9)
-                for _, row in df.iterrows():
-                    pdf.cell(30, 10, str(row["tanggal"]), border=1, align='C')
-                    pdf.cell(50, 10, str(row["jenis_dinasan"])[:25], border=1)
-                    pdf.cell(50, 10, str(row["serah_terima"])[:25], border=1)
-                    pdf.cell(60, 10, str(row["detail_kegiatan"])[:30], border=1, ln=True)
-                
-                # Konversi keluaran PDF ke bentuk Bytes murni secara aman
-                try:
-                    pdf_bytes = pdf.output(dest='S')
-                    if isinstance(pdf_bytes, str):
-                        pdf_bytes = pdf_bytes.encode('latin-1')
-                except:
-                    pdf_bytes = bytes(pdf.output())
-
-                # --- PERBAIKAN UTAMA: Menggunakan label teks bersih tanpa emoji/simbol asing ---
-                st.download_button(
-                    label="Download Dokumen PDF Hasil Cetak",
-                    data=pdf_bytes,
-                    file_name=f"Laporan_{nama_cari}_{filter_bln}.pdf",
-                    mime="application/pdf",
-                    key="btn_download_proses"
-                )
-        else:
-            st.info("Belum ada entri data laporan untuk bulan ini.")
-    else:
-        st.warning("Data karyawan tidak ditemukan di database.")
+        pdf_bytes = pdf.output(dest='S').encode('latin-1')
+        
+        st.download_button(
+            label="📥 Download PDF Sekarang",
+            data=pdf_bytes,
+            file_name="Laporan_KAI.pdf",
+            mime="application/pdf"
+        )
