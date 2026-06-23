@@ -121,9 +121,8 @@ if df.empty:
     st.warning("⚠️ Data laporan tidak ditemukan untuk karyawan, bulan, dan tahun yang dipilih.")
     st.stop()
 
-st.dataframe(df[["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]], use_container_width=True)
-            
-if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
+    st.dataframe(df[["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]], use_container_width=True)
+    if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
                 pdf = FPDF()
                 
                 # ================= HALAMAN 1: COVER LAYOUT KANAN KERETA =================
@@ -249,5 +248,5 @@ if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
                 pdf_output = BytesIO()
                 pdf.output(pdf_output)
                 st.download_button(label="📥 Download Dokumen PDF Resmi 4 Halaman", data=pdf_output.getvalue(), file_name=f"Laporan_Resmi_{nama_cari}_{filter_bln}.pdf", mime="application/pdf")
-     else:
+    else:
             st.info("Belum ada entri data laporan untuk bulan ini.")
