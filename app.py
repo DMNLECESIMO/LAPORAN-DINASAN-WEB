@@ -115,7 +115,7 @@ elif choice == "Pencarian & Cetak PDF":
         
         if res_harian:
             df = pd.DataFrame(res_harian)
-            st.dataframe(df[["tanggal", "dinasan", "kegiatan", "serah_terima"]], use_container_width=True)
+            st.dataframe(df[["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]], use_container_width=True)
             
             if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
                 pdf = FPDF()
