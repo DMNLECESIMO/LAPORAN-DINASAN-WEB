@@ -102,9 +102,16 @@ elif choice == "Pencarian & Cetak PDF":
         
         nipp_cari = opt_k[nama_cari]
         filter_bln = f"{thn_cari}-{bln_cari}"
+        # Tentukan jumlah hari maksimum secara dinamis sesuai bulan
+        if bln_cari in ["01", "03", "05", "07", "08", "10", "12"]:
+            last_day = "31"
+        elif bln_cari == "02":
+            last_day = "29" if int(thn_cari) % 4 == 0 else "28"
+        else:
+            last_day = "30"
         
         prof = supabase.table("karyawan").select("*").eq("nipp", nipp_cari).single().execute().data
-        res_harian = supabase.table("laporan").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("tanggal", f"{filter_bln}-31").order("tanggal").execute().data
+        res_harian = supabase.table("laporan").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("tanggal", f"{filter_bln}-{last_day}").order("tanggal").execute()
         
         if res_harian:
             df = pd.DataFrame(res_harian)
