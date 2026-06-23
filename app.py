@@ -14,7 +14,7 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# 2. Membuat Struktur Navigasi Sidebar (Mengembalikan Semua Menu Anda)
+# 2. Membuat Struktur Navigasi Sidebar (Semua menu lengkap & aman)
 st.sidebar.title("Navigasi Aplikasi")
 menu = st.sidebar.selectbox(
     "Menu Utama", 
@@ -23,13 +23,13 @@ menu = st.sidebar.selectbox(
 
 # ==================== HALAMAN 1: BERANDA ====================
 if menu == "Beranda":
-    st.title("🚂 Selamat Datang di Web Laporan Pengoperasian KAI")
+    st.title("Web Laporan Pengoperasian KAI")
     st.write("Sistem manajemen data operasional dinasan dan rekapitulasi laporan resmi.")
     st.info("Silakan pilih menu di samping kiri untuk menginput data atau mencetak PDF.")
 
 # ==================== HALAMAN 2: INPUT DATA KARYAWAN ====================
 elif menu == "Input Data Karyawan":
-    st.title("👥 Input Data Karyawan Baru")
+    st.title("Input Data Karyawan Baru")
     
     with st.form("form_karyawan", clear_on_submit=True):
         nipp_input = st.text_input("NIPP Karyawan")
@@ -48,9 +48,8 @@ elif menu == "Input Data Karyawan":
 
 # ==================== HALAMAN 3: INPUT LAPORAN HARIAN ====================
 elif menu == "Input Laporan Harian":
-    st.title("📝 Input Laporan Harian Dinasan")
+    st.title("Input Laporan Harian Dinasan")
     
-    # Ambil list karyawan untuk pilihan di form
     try:
         karyawan_res = supabase.table("karyawan").select("nipp, nama").execute()
         list_karyawan = karyawan_res.data
@@ -66,8 +65,6 @@ elif menu == "Input Laporan Harian":
             jenis_dinasan = st.text_input("Jenis Dinasan (Contoh: DINAS PPKA PAGI)")
             detail_kegiatan = st.text_area("Detail Kegiatan")
             serah_terima = st.text_input("Serah Terima Dinasan")
-            
-            # Key unik diubah agar tidak memicu DuplicateElementId
             submit_laporan = st.form_submit_button("Simpan Laporan Harian")
             
             if submit_laporan:
@@ -88,8 +85,8 @@ elif menu == "Input Laporan Harian":
 
 # ==================== HALAMAN 4: PENCARIAN & CETAK PDF ====================
 elif menu == "Pencarian & Cetak PDF":
-    st.title("🚂 Web Laporan Pengoperasian KAI")
-    st.subheader("🔍 Rekapitulasi Data & Download PDF 4 Halaman")
+    st.title("Web Laporan Pengoperasian KAI")
+    st.subheader("Rekapitulasi Data & Download PDF 4 Halaman")
 
     try:
         karyawan_res = supabase.table("karyawan").select("nipp, nama").execute()
@@ -141,7 +138,7 @@ elif menu == "Pencarian & Cetak PDF":
                     
             st.dataframe(df[kolom_wajib], use_container_width=True)
             
-            if st.button("🖨️ Urutkan & Cetak PDF Resmi", key="btn_cetak_pdf_utama"):
+            if st.button("Cetak PDF Resmi", key="btn_cetak_pdf_utama"):
                 pdf = FPDF()
                 pdf.add_page()
                 
@@ -172,21 +169,18 @@ elif menu == "Pencarian & Cetak PDF":
                     pdf.cell(50, 10, str(row["serah_terima"])[:25], border=1)
                     pdf.cell(60, 10, str(row["detail_kegiatan"])[:30], border=1, ln=True)
                 
-                # Render berkas output secara aman
+                # Konversi keluaran PDF ke bentuk Bytes murni secara aman
                 try:
-                    pdf_content = pdf.output()
-                    if isinstance(pdf_content, str):
-                        pdf_output = pdf_content.encode('latin-1')
-                    else:
-                        pdf_output = pdf_content
+                    pdf_bytes = pdf.output(dest='S')
+                    if isinstance(pdf_bytes, str):
+                        pdf_bytes = pdf_bytes.encode('latin-1')
                 except:
-                    pdf_output = pdf.output(dest='S')
-                    if isinstance(pdf_output, str):
-                        pdf_output = pdf_output.encode('latin-1')
-                
+                    pdf_bytes = bytes(pdf.output())
+
+                # --- PERBAIKAN UTAMA: Menggunakan label teks bersih tanpa emoji/simbol asing ---
                 st.download_button(
-                    label="📥 Download Dokumen PDF Hasil Cetak",
-                    data=pdf_output,
+                    label="Download Dokumen PDF Hasil Cetak",
+                    data=pdf_bytes,
                     file_name=f"Laporan_{nama_cari}_{filter_bln}.pdf",
                     mime="application/pdf",
                     key="btn_download_proses"
