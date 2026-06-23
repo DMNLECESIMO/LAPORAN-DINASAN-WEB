@@ -81,7 +81,7 @@ elif choice == "Input Laporan Harian & Absensi":
             url_f1 = upload_foto(f1, "harian", f"f1_{nipp_terpilih}_{tgl}") if f1 else jns
             url_f2 = upload_foto(f2, "harian", f"f2_{nipp_terpilih}_{tgl}") if f2 else jns
             
-            harian_data = {"nipp": nipp_terpilih, "tanggal": tgl, "dinasan": jns, "kegiatan": keg, "serah_terima": serah, "foto1_url": url_f1, "foto2_url": url_f2}
+            harian_data = {"nipp": nipp_terpilih, "tanggal": str(tgl), "jenis_dinasan": jns, "detail_kegiatan": keg, "serah_terima": serah, "dok_url": url_f1}
             check_h = supabase.table("laporan").select("*").eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
             if check_h.data:
                 supabase.table("laporan").update(harian_data).eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
