@@ -127,7 +127,7 @@ elif choice == "Pencarian & Cetak PDF":
             last_day = "30"
         
         prof = supabase.table("karyawan").select("*").eq("nipp", nipp_cari).single().execute().data
-        res_harian = supabase.table("laporan").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("tanggal", f"{filter_bln}-{last_day}").order("tanggal")
+        res_harian = supabase.table("laporan").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("tanggal", f"{filter_bln}-{last_day}").order("tanggal").execute()
         # --- PERBAIKAN INDENTASI & LOGIKA DI BAWAH INI ---
         if res_harian.data:
             df = pd.DataFrame(res_harian.data)
