@@ -93,7 +93,7 @@ elif choice == "Input Laporan Harian & Absensi":
         f1 = st.file_uploader("Foto Dokumentasi Kegiatan 1", type=["png", "jpg", "jpeg"], key="f1")
         f2 = st.file_uploader("Foto Dokumentasi Kegiatan 2", type=["png", "jpg", "jpeg"], key="f2")
         
-        if st.button("Simpan Laporan Harian"):
+        if st.button("Simpan Laporan Harian", key="btn_simpan_laporan_harian_input"):
             url_f1 = upload_foto(f1, "harian", f"f1_{nipp_terpilih}_{tgl}") if f1 else jns
             url_f2 = upload_foto(f2, "harian", f"f2_{nipp_terpilih}_{tgl}") if f2 else jns
             
