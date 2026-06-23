@@ -82,11 +82,11 @@ elif choice == "Input Laporan Harian & Absensi":
             url_f2 = upload_foto(f2, "harian", f"f2_{nipp_terpilih}_{tgl}") if f2 else jns
             
             harian_data = {"nipp": nipp_terpilih, "tanggal": tgl, "dinasan": jns, "kegiatan": keg, "serah_terima": serah, "foto1_url": url_f1, "foto2_url": url_f2}
-            check_h = supabase.table("dinasan_harian").select("*").eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
+            check_h = supabase.table("laporan").select("*").eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
             if check_h.data:
-                supabase.table("dinasan_harian").update(harian_data).eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
+                supabase.table("laporan").update(harian_data).eq("nipp", nipp_terpilih).eq("tanggal", tgl).execute()
             else:
-                supabase.table("dinasan_harian").insert(harian_data).execute()
+                supabase.table("laporan").insert(harian_data).execute()
             st.success("Laporan harian berhasil disimpan!")
 
 # --- MENU 3: PENCARIAN & CETAK PDF TEMPLATE PERSIS ---
