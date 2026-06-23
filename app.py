@@ -39,7 +39,7 @@ if choice == "Input Profil Karyawan":
         if st.form_submit_button("Simpan Data Karyawan"):
             sc_url = upload_foto(foto_sc, "smartcard", f"sc_{nipp}") if foto_sc else None
             data = {"nipp": nipp, "nama": nama, "jabatan": jabatan, "unit_kerja": unit, "daop": daop}
-            if sc_url: data["smartcard_url"] = sc_url
+            if sc_url: data["sc_url"] = sc_url
             
             check = supabase.table("karyawan").select("*").eq("nipp", nipp).execute()
             if check.data:
