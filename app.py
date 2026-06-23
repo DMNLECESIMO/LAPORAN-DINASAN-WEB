@@ -118,7 +118,7 @@ elif choice == "Pencarian & Cetak PDF":
         
         nipp_cari = opt_k[nama_cari]
         filter_bln = f"{thn_cari}-{bln_cari}"
-        # Tentukan jumlah hari maksimum secara dinamis sesuai bulan
+        
         if bln_cari in ["01", "03", "05", "07", "08", "10", "12"]:
             last_day = "31"
         elif bln_cari == "02":
@@ -127,18 +127,15 @@ elif choice == "Pencarian & Cetak PDF":
             last_day = "30"
         
         prof = supabase.table("karyawan").select("*").eq("nipp", nipp_cari).single().execute().data
-        res_harian = supabase.table("laporan").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("tanggal", f"{filter_bln}-{last_day}").order("tanggal").execute()
+        res_harian = supabase.table("laporan").select("*").eq("nipp", nipp_cari).gte("tanggal", f"{filter_bln}-01").lte("lte", f"{filter_bln}-{last_day}").order("tanggal").execute()
         
-        if res_harian:
-           df = pd.DataFrame(res_harian.data)
-
-# KODE BARU: Cek jika data kosong, hentikan proses dengan pesan ramah
-if df.empty:
-    st.warning("⚠️ Data laporan tidak ditemukan untuk karyawan, bulan, dan tahun yang dipilih.")
-    st.stop()
-
-    st.dataframe(df[["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]], use_container_width=True)
-    if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
+        # --- PERBAIKAN INDENTASI & LOGIKA DI BAWAH INI ---
+        if res_harian.data:
+            df = pd.DataFrame(res_harian.data)
+            
+            st.dataframe(df[["tanggal", "jenis_dinasan", "detail_kegiatan", "serah_terima"]], use_container_width=True)
+            
+            if st.button("🖨️ Urutkan & Cetak PDF (Sesuai Format Template Gambar)"):
                 pdf = FPDF()
                 
                 # ================= HALAMAN 1: COVER LAYOUT KANAN KERETA =================
@@ -149,7 +146,6 @@ if df.empty:
                 pdf.cell(100, 8, f"BULAN: {filter_bln.upper()}", ln=True)
                 pdf.ln(25)
                 
-                # Cetak Data Profil Karyawan di Sisi Kiri Halaman
                 pdf.set_font("Arial", 'B', 10)
                 labels = [("NAMA", prof['nama']), ("NIPP", prof['nipp']), ("JABATAN", prof['jabatan']), ("UNIT KERJA", prof['unit_kerja']), ("DAOP", prof['daop'])]
                 for label, val in labels:
@@ -159,9 +155,7 @@ if df.empty:
                     pdf.cell(65, 10, str(val), ln=True)
                     pdf.set_font("Arial", 'B', 10)
                 
-                # Gambar Kereta Melintasi Jembatan di Sisi Kanan Cover (Seperti di Gambar)
                 try:
-                    # Menggunakan link ilustrasi lokomotif publik KAI yang stabil
                     url_kereta = "https://images.unsplash.com/photo-1532103054090-334e6e60b77a?q=80&w=600&auto=format&fit=crop"
                     res_k = requests.get(url_kereta)
                     pdf.image(BytesIO(res_k.content), x=110, y=35, w=85, h=130)
@@ -173,8 +167,8 @@ if df.empty:
                 pdf.set_font("Arial", 'B', 12)
                 pdf.cell(200, 10, "FOTO SMARTCARD", ln=True, align='C')
                 pdf.ln(10)
-                if prof.get('smartcard_url'):
-                    res = requests.get(prof['smartcard_url'])
+                if prof.get('sc_url'):
+                    res = requests.get(prof['sc_url'])
                     pdf.image(BytesIO(res.content), x=25, y=40, w=160, h=100)
                 else:
                     pdf.cell(200, 10, "[Belum ada lampiran Smartcard PKA]", align='C')
@@ -197,7 +191,6 @@ if df.empty:
                 pdf.cell(200, 10, "REKAPITULASI LAPORAN REAL-TIME", ln=True, align='C')
                 pdf.ln(5)
                 
-                # Desain Header Kolom Sesuai Persis dengan Format Gambar Anda
                 pdf.set_font("Arial", 'B', 9)
                 pdf.cell(25, 10, "Hari / Tanggal", border=1, align='C')
                 pdf.cell(42, 10, "Kegiatan", border=1, align='C')
@@ -205,10 +198,10 @@ if df.empty:
                 pdf.cell(75, 10, "Dokumentasi Kegiatan", border=1, ln=True, align='C')
                 
                 pdf.set_font("Arial", '', 8)
-                row_height = 32 # Tinggi baris kotak agar foto muat presisi di dalam tabel
+                row_height = 32
                 
-                for r in res_harian:
-                    # Cegah tabel terpotong di bawah kertas
+                # --- PERBAIKAN LOOPING .data DI SINI ---
+                for r in res_harian.data:
                     if pdf.get_y() + row_height > 275:
                         pdf.add_page()
                         pdf.set_font("Arial", 'B', 9)
@@ -221,24 +214,21 @@ if df.empty:
                     x = pdf.get_x()
                     y = pdf.get_y()
                     
-                    # Kotak 1: Tanggal
                     pdf.rect(x, y, 25, row_height)
                     pdf.set_xy(x, y + 12)
                     pdf.cell(25, 5, str(r['tanggal']), border=0, align='C')
                     
-                    # Kotak 2: Kegiatan (Multi-line text handling)
+                    # --- PERBAIKAN KOLOM detail_kegiatan DI SINI ---
                     pdf.set_xy(x + 25, y + 2)
-                    pdf.multi_cell(42, 5, str(r['kegiatan'])[:70], border=0, align='L')
+                    pdf.multi_cell(42, 5, str(r['detail_kegiatan'])[:70], border=0, align='L')
                     pdf.rect(x + 25, y, 42, row_height)
                     
-                    # Kotak 3: Serah Terima Dinasan
                     pdf.set_xy(x + 67, y + 2)
                     pdf.multi_cell(48, 5, str(r['serah_terima'])[:80], border=0, align='L')
                     pdf.rect(x + 67, y, 48, row_height)
                     
-                    # Kotak 4: Dokumentasi Foto / Status Dinasan (Libur/Sakit)
                     pdf.rect(x + 115, y, 75, row_height)
-                    if str(r['foto1_url']).startswith("http"):
+                    if str(r.get('foto1_url', '')).startswith("http"):
                         try:
                             res1 = requests.get(r['foto1_url'])
                             pdf.image(BytesIO(res1.content), x=x+118, y=y+3, w=32, h=26)
@@ -246,17 +236,16 @@ if df.empty:
                             pdf.set_xy(x + 115, y + 12)
                             pdf.cell(35, 5, "[Gagal Load]", align='C')
                             
-                        if str(r['foto2_url']).startswith("http"):
+                        if str(r.get('foto2_url', '')).startswith("http"):
                             try:
                                 res2 = requests.get(r['foto2_url'])
                                 pdf.image(BytesIO(res2.content), x=x+154, y=y+3, w=32, h=26)
                             except:
                                 pass
                     else:
-                        # Jika status LIBUR/SAKIT, teks tercetak tepat di tengah kolom dokumentasi
                         pdf.set_font("Arial", 'B', 10)
                         pdf.set_xy(x + 115, y + 12)
-                        pdf.cell(75, 5, str(r['foto1_url']), border=0, align='C')
+                        pdf.cell(75, 5, str(r.get('jenis_dinasan', '-')), border=0, align='C')
                         pdf.set_font("Arial", '', 8)
                         
                     pdf.set_y(y + row_height)
@@ -264,5 +253,7 @@ if df.empty:
                 pdf_output = BytesIO()
                 pdf.output(pdf_output)
                 st.download_button(label="📥 Download Dokumen PDF Resmi 4 Halaman", data=pdf_output.getvalue(), file_name=f"Laporan_Resmi_{nama_cari}_{filter_bln}.pdf", mime="application/pdf")
+        else:
+            st.warning("⚠️ Data laporan tidak ditemukan untuk karyawan, bulan, dan tahun yang dipilih.")
     else:
-            st.info("Belum ada entri data laporan untuk bulan ini.")
+        st.info("Belum ada entri data laporan untuk bulan ini.")
